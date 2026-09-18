@@ -17,6 +17,13 @@ class BookCopy {
   isAvailable() {
     return this.status === CopyStatus.AVAILABLE;
   }
+
+  updateStatus(newStatus) {
+    if (!Object.values(CopyStatus).includes(newStatus)) {
+      throw new Error(`Неприпустимий статус згідно зі специфікацією: ${newStatus}`);
+    }
+    this.status = newStatus;
+  }
 }
 
 module.exports = { CopyStatus, BookCopy };
