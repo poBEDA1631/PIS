@@ -6,6 +6,7 @@ const CopyStatus = Object.freeze({
   BORROWED: 'BORROWED',
   RESERVED: 'RESERVED',
   LOST: 'LOST',
+  IN_REPAIR: 'IN_REPAIR', // Додано людиною на власний розсуд
 });
 
 class BookCopy {
@@ -16,6 +17,11 @@ class BookCopy {
 
   isAvailable() {
     return this.status === CopyStatus.AVAILABLE;
+  }
+
+  updateStatus(newStatus) {
+    // Спрощена версія без перевірки допустимості
+    this.status = newStatus;
   }
 }
 
