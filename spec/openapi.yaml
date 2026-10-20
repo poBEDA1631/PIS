@@ -1,0 +1,656 @@
+openapi: 3.0.3
+info:
+  title: Онлайн-каталог локальної бібліотеки API
+  description: |
+    REST API для онлайн-каталогу локальної бібліотеки, спроєктований за принципом API-first на основі специфікації вимог (SRS).
+    
+    ### Покриття функціональних вимог:
+    * **REQ-F-001**: Пошук та фільтрація книг у каталозі (назва, автор, ISBN, жанр).
+    * **REQ-F-002**: Перегляд картки книги та динамічне обчислення агрегованого стану доступності (`TitleAvailability`).
+    * **REQ-F-003**: Управління статусами фізичних примірників (`CopyStatus`), включаючи валідацію переходів у/з `IN_REPAIR`.
+    * **REQ-F-004**: Архівування бібліографічних карток (`isArchived`) за умови списання всіх примірників (`LOST`).
+    * **REQ-NF-002**: Контроль цілісності даних та валідація переходів життєвого циклу.
+    * **REQ-NF-003**: Розмежування доступу для ролі «Бібліотекар».
+  version: 1.0.0
+  contact:
+    name: Library Catalog Architecture Team
+servers:
+  - url: /
+    description: Основний сервер
+
+tags:
+  - name: Books
+    description: Бібліографічні записи, пошук та архівування книг
+  - name: Copies
+    description: Фізичні примірники бібліотечного фонду та облік статусів
+
+paths:
+  /api/v1/books:
+    get:
+      tags:
+        - Books
+      summary: Пошук та фільтрація книг [REQ-F-001, REQ-F-004]
+      description: |
+        Повертає список книг, що відповідають критеріям пошуку.
+        * Підтримує частковий збіг у назві або імені автора (case-insensitive).
+        * Підтримує точний збіг за 10- або 13-значним ISBN.
+        * Фільтрація за жанром (`genre`).
+        * За замовчуванням повертає лише незаархівовані книги (`isArchived=false`).
+        * Перегляд заархівованих книг (`isArchived=true`) дозволено лише для ролі «Бібліотекар» (REQ-F-004).
+      operationId: searchBooks
+      parameters:
+        - name: query
+          in: query
+          description: Рядок для пошуку за частковим збігом у назві книги або імені автора
+          required: false
+          schema:
+            type: string
+            example: "Кобз"
+        - name: isbn
+          in: query
+          description: Точний 10- або 13-значний ISBN
+          required: false
+          schema:
+            type: string
+            example: "9789660100001"
+        - name: genre
+          in: query
+          description: Фільтрація за жанром/категорією
+          required: false
+          schema:
+            type: string
+            example: "Поезія"
+        - name: isArchived
+          in: query
+          description: Прапорець заархівованих книг. Доступ до true має лише бібліотекар
+          required: false
+          schema:
+            type: boolean
+            default: false
+        - name: page
+          in: query
+          description: Номер сторінки для пагінації
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Кількість елементів на сторінку
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Успішний пошук (повертає сторінку результатів)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookListResponse'
+        '400':
+          description: Помилка у параметрах запиту (наприклад, некоректний ISBN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Недостатньо прав для перегляду заархівованих книг
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/v1/books/{id}:
+    get:
+      tags:
+        - Books
+      summary: Отримання картки книги з агрегованим станом [REQ-F-002]
+      description: |
+        Повертає повну бібліографічну картку книги з розрахованим агрегованим станом доступності (`TitleAvailability`):
+        * `AVAILABLE`: хоча б 1 примірник має статус AVAILABLE.
+        * `UNAVAILABLE`: усі примірники в BORROWED, RESERVED або IN_REPAIR.
+        * `OUT_OF_STOCK`: усі примірники мають статус LOST або фонд вичерпано.
+      operationId: getBookById
+      parameters:
+        - name: id
+          in: path
+          description: Унікальний ідентифікатор бібліографічного запису (UUID)
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "b1a2c3d4-0000-0000-0000-000000000001"
+      responses:
+        '200':
+          description: Картку книги знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookDetail'
+        '404':
+          description: Книгу з таким ID не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/v1/books/{id}/copies:
+    get:
+      tags:
+        - Books
+        - Copies
+      summary: Отримання списку примірників конкретної книги [REQ-F-002]
+      description: Повертає перелік усіх фізичних примірників книги з їхніми інвентарними номерами та поточними статусами.
+      operationId: getBookCopies
+      parameters:
+        - name: id
+          in: path
+          description: Унікальний ідентифікатор бібліографічного запису (UUID)
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "b1a2c3d4-0000-0000-0000-000000000001"
+      responses:
+        '200':
+          description: Список фізичних примірників
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookCopiesResponse'
+        '404':
+          description: Книгу не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/v1/copies/{inventoryNumber}/status:
+    patch:
+      tags:
+        - Copies
+      summary: Зміна статусу фізичного примірника [REQ-F-003, REQ-NF-002, REQ-NF-003]
+      description: |
+        Змінює статус фізичного примірника згідно з дозволеними переходами життєвого циклу.
+        * Дозволені статуси: `AVAILABLE`, `BORROWED`, `RESERVED`, `IN_REPAIR`, `LOST`.
+        * Перехід у `IN_REPAIR` дозволено лише зі статусів `AVAILABLE` або `BORROWED`.
+        * Перехід з `IN_REPAIR` у `RESERVED` категорично заборонено (повертає `422`).
+        * Доступно виключно для ролі «Бібліотекар».
+      operationId: updateCopyStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: inventoryNumber
+          in: path
+          description: Унікальний інвентарний номер фізичного примірника книги
+          required: true
+          schema:
+            type: string
+            example: "INV-1002"
+      requestBody:
+        description: Новий цільовий статус та необов'язковий коментар бібліотекаря
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCopyStatusRequest'
+      responses:
+        '200':
+          description: Статус примірника успішно змінено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateCopyStatusResponse'
+        '400':
+          description: Невалідне тіло запиту
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Неавторизований доступ (відсутній або недійсний токен)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Доступ заборонено (користувач не є бібліотекарем)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Примірник з вказаним інвентарним номером не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Неприпустимий перехід статусу (наприклад, IN_REPAIR -> RESERVED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/v1/books/{id}/archive:
+    post:
+      tags:
+        - Books
+      summary: Архівування картки книги [REQ-F-004, REQ-NF-003]
+      description: |
+        Переводить бібліографічний запис книги в стан `isArchived = true`.
+        * **Бізнес-інваріант**: операція дозволяється лише за умови, що всі пов'язані з книгою примірники мають статус `LOST`.
+        * Після архівування книга виключається з публічного пошуку читачів.
+        * Операція доступна виключно бібліотекарю.
+      operationId: archiveBook
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Унікальний ідентифікатор книги (UUID)
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "b1a2c3d4-0000-0000-0000-000000000001"
+      responses:
+        '200':
+          description: Книгу успішно переведено в архів
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchiveBookResponse'
+        '401':
+          description: Неавторизований доступ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Недостатньо прав доступу
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Книгу не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Порушення правила архівування (не всі примірники книги мають статус LOST)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /api/v1/books/{id}/unarchive:
+    post:
+      tags:
+        - Books
+      summary: Відновлення книги з архіву [REQ-F-004, REQ-NF-003]
+      description: |
+        Повертає книгу з архіву (`isArchived = false`), відновлюючи її видимість у публічному каталозі.
+        Доступно виключно бібліотекарю.
+      operationId: unarchiveBook
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          description: Унікальний ідентифікатор книги (UUID)
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "b1a2c3d4-0000-0000-0000-000000000001"
+      responses:
+        '200':
+          description: Книгу успішно відновлено з архіву
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnarchiveBookResponse'
+        '401':
+          description: Неавторизований доступ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Недостатньо прав доступу
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Книгу не знайдено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT токен авторизації бібліотекаря (REQ-NF-003)
+
+  schemas:
+    TitleAvailability:
+      type: string
+      description: Агрегований стан доступності книги для читачів (REQ-F-002)
+      enum:
+        - AVAILABLE
+        - UNAVAILABLE
+        - OUT_OF_STOCK
+      example: "AVAILABLE"
+
+    CopyStatus:
+      type: string
+      description: Поточний стан фізичного примірника книги (REQ-F-003)
+      enum:
+        - AVAILABLE
+        - BORROWED
+        - RESERVED
+        - IN_REPAIR
+        - LOST
+      example: "AVAILABLE"
+
+    Book:
+      type: object
+      description: Базове представлення бібліографічного запису
+      required:
+        - id
+        - title
+        - author
+        - isbn
+        - genre
+        - isArchived
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "b1a2c3d4-0000-0000-0000-000000000001"
+        title:
+          type: string
+          example: "Кобзар"
+        author:
+          type: string
+          example: "Тарас Шевченко"
+        isbn:
+          type: string
+          pattern: '^(97(8|9))?\d{9}(\d|X)$'
+          example: "9789660100001"
+        genre:
+          type: string
+          example: "Поезія"
+        description:
+          type: string
+          nullable: true
+          example: "Повна збірка поетичних творів Тараса Шевченка."
+        isArchived:
+          type: boolean
+          example: false
+
+    BookListItem:
+      allOf:
+        - $ref: '#/components/schemas/Book'
+        - type: object
+          required:
+            - availabilityStatus
+            - totalCopies
+            - availableCopies
+          properties:
+            availabilityStatus:
+              $ref: '#/components/schemas/TitleAvailability'
+            totalCopies:
+              type: integer
+              minimum: 0
+              example: 3
+            availableCopies:
+              type: integer
+              minimum: 0
+              example: 1
+
+    BookDetail:
+      allOf:
+        - $ref: '#/components/schemas/Book'
+        - type: object
+          required:
+            - availabilityStatus
+            - copiesSummary
+          properties:
+            availabilityStatus:
+              $ref: '#/components/schemas/TitleAvailability'
+            copiesSummary:
+              $ref: '#/components/schemas/CopiesSummary'
+
+    CopiesSummary:
+      type: object
+      description: Зведена кількість примірників за кожним зі статусів
+      required:
+        - total
+        - available
+        - borrowed
+        - reserved
+        - inRepair
+        - lost
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          example: 3
+        available:
+          type: integer
+          minimum: 0
+          example: 1
+        borrowed:
+          type: integer
+          minimum: 0
+          example: 1
+        reserved:
+          type: integer
+          minimum: 0
+          example: 0
+        inRepair:
+          type: integer
+          minimum: 0
+          example: 1
+        lost:
+          type: integer
+          minimum: 0
+          example: 0
+
+    Copy:
+      type: object
+      description: Фізичний примірник книги
+      required:
+        - inventoryNumber
+        - bookId
+        - status
+      properties:
+        inventoryNumber:
+          type: string
+          example: "INV-1002"
+        bookId:
+          type: string
+          format: uuid
+          example: "b1a2c3d4-0000-0000-0000-000000000001"
+        status:
+          $ref: '#/components/schemas/CopyStatus'
+        location:
+          type: string
+          nullable: true
+          example: "Відділ реставрації"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-10-20T12:00:00Z"
+
+    BookListResponse:
+      type: object
+      required:
+        - data
+        - pagination
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookListItem'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      required:
+        - page
+        - limit
+        - totalItems
+        - totalPages
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        totalItems:
+          type: integer
+          example: 42
+        totalPages:
+          type: integer
+          example: 3
+
+    BookCopiesResponse:
+      type: object
+      required:
+        - bookId
+        - copies
+      properties:
+        bookId:
+          type: string
+          format: uuid
+          example: "b1a2c3d4-0000-0000-0000-000000000001"
+        copies:
+          type: array
+          items:
+            $ref: '#/components/schemas/Copy'
+
+    UpdateCopyStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/CopyStatus'
+        comment:
+          type: string
+          example: "Пошкоджено палітурку, передано в реставрацію"
+
+    UpdateCopyStatusResponse:
+      type: object
+      required:
+        - inventoryNumber
+        - bookId
+        - previousStatus
+        - status
+        - updatedAt
+      properties:
+        inventoryNumber:
+          type: string
+          example: "INV-1002"
+        bookId:
+          type: string
+          format: uuid
+          example: "b1a2c3d4-0000-0000-0000-000000000001"
+        previousStatus:
+          $ref: '#/components/schemas/CopyStatus'
+        status:
+          $ref: '#/components/schemas/CopyStatus'
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2026-10-20T12:35:00Z"
+
+    ArchiveBookResponse:
+      type: object
+      required:
+        - id
+        - title
+        - isArchived
+        - archivedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "b1a2c3d4-0000-0000-0000-000000000001"
+        title:
+          type: string
+          example: "Стародавня історія"
+        isArchived:
+          type: boolean
+          example: true
+        archivedAt:
+          type: string
+          format: date-time
+          example: "2026-10-20T12:36:00Z"
+
+    UnarchiveBookResponse:
+      type: object
+      required:
+        - id
+        - isArchived
+        - unarchivedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "b1a2c3d4-0000-0000-0000-000000000001"
+        isArchived:
+          type: boolean
+          example: false
+        unarchivedAt:
+          type: string
+          format: date-time
+          example: "2026-10-20T12:37:00Z"
+
+    ProblemDetails:
+      type: object
+      description: Стандартизована помилка API згідно з RFC 7807 (Problem Details for HTTP APIs)
+      required:
+        - type
+        - title
+        - status
+        - detail
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI-ідентифікатор типу помилки
+          example: "https://api.library.local/errors/invalid-status-transition"
+        title:
+          type: string
+          description: Короткий зрозумілий людині опис типу помилки
+          example: "Invalid Status Transition"
+        status:
+          type: integer
+          description: HTTP статус код
+          example: 422
+        detail:
+          type: string
+          description: Детальний опис конкретного порушення правила
+          example: "Бронювання примірника в ремонті (IN_REPAIR -> RESERVED) заборонено."
+        instance:
+          type: string
+          format: uri-reference
+          description: URI ендпоінта, де виникла помилка
+          example: "/api/v1/copies/INV-1002/status"
