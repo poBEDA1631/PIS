@@ -12,6 +12,9 @@ info:
     * **REQ-NF-002**: Контроль цілісності даних та валідація переходів життєвого циклу.
     * **REQ-NF-003**: Розмежування доступу для ролі «Бібліотекар».
   version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
   contact:
     name: Library Catalog Architecture Team
 servers:
@@ -38,6 +41,7 @@ paths:
         * За замовчуванням повертає лише незаархівовані книги (`isArchived=false`).
         * Перегляд заархівованих книг (`isArchived=true`) дозволено лише для ролі «Бібліотекар» (REQ-F-004).
       operationId: searchBooks
+      security: []
       parameters:
         - name: query
           in: query
@@ -115,6 +119,7 @@ paths:
         * `UNAVAILABLE`: усі примірники в BORROWED, RESERVED або IN_REPAIR.
         * `OUT_OF_STOCK`: усі примірники мають статус LOST або фонд вичерпано.
       operationId: getBookById
+      security: []
       parameters:
         - name: id
           in: path
@@ -146,6 +151,7 @@ paths:
       summary: Отримання списку примірників конкретної книги [REQ-F-002]
       description: Повертає перелік усіх фізичних примірників книги з їхніми інвентарними номерами та поточними статусами.
       operationId: getBookCopies
+      security: []
       parameters:
         - name: id
           in: path
@@ -217,24 +223,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: "https://api.library.local/errors/unauthorized"
+                title: "Unauthorized"
+                status: 401
+                detail: "Потрібна автентифікація бібліотекаря."
+                instance: "/api/v1/copies/INV-1002/status"
         '403':
           description: Доступ заборонено (користувач не є бібліотекарем)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: "https://api.library.local/errors/forbidden"
+                title: "Forbidden"
+                status: 403
+                detail: "Недостатньо прав для виконання операції."
+                instance: "/api/v1/copies/INV-1002/status"
         '404':
           description: Примірник з вказаним інвентарним номером не знайдено
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: "https://api.library.local/errors/not-found"
+                title: "Not Found"
+                status: 404
+                detail: "Примірник з інвентарним номером INV-1002 не знайдено."
+                instance: "/api/v1/copies/INV-1002/status"
         '422':
           description: Неприпустимий перехід статусу (наприклад, IN_REPAIR -> RESERVED)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: "https://api.library.local/errors/invalid-status-transition"
+                title: "Invalid Status Transition"
+                status: 422
+                detail: "Бронювання примірника в ремонті (IN_REPAIR -> RESERVED) заборонено."
+                instance: "/api/v1/copies/INV-1002/status"
 
   /api/v1/books/{id}/archive:
     post:
@@ -271,24 +301,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: "https://api.library.local/errors/unauthorized"
+                title: "Unauthorized"
+                status: 401
+                detail: "Потрібна автентифікація бібліотекаря для архівування книги."
+                instance: "/api/v1/books/b1a2c3d4-0000-0000-0000-000000000001/archive"
         '403':
           description: Недостатньо прав доступу
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: "https://api.library.local/errors/forbidden"
+                title: "Forbidden"
+                status: 403
+                detail: "Операція дозволена виключно користувачам з роллю «Бібліотекар»."
+                instance: "/api/v1/books/b1a2c3d4-0000-0000-0000-000000000001/archive"
         '404':
           description: Книгу не знайдено
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: "https://api.library.local/errors/not-found"
+                title: "Not Found"
+                status: 404
+                detail: "Книгу з вказаним ID не знайдено."
+                instance: "/api/v1/books/b1a2c3d4-0000-0000-0000-000000000001/archive"
         '422':
           description: Порушення правила архівування (не всі примірники книги мають статус LOST)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: "https://api.library.local/errors/archive-precondition-failed"
+                title: "Cannot Archive Book"
+                status: 422
+                detail: "Неможливо заархівувати книгу: не всі примірники мають статус LOST (знайдено примірники в обігу/ремонті)."
+                instance: "/api/v1/books/b1a2c3d4-0000-0000-0000-000000000001/archive"
 
   /api/v1/books/{id}/unarchive:
     post:
