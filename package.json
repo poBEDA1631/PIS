@@ -1,0 +1,33 @@
+{
+  "name": "library-catalog",
+  "version": "1.0.0",
+  "description": "Навчальний проєкт у межах лабораторного практикуму SDD.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "jest --runInBand"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/poBEDA1631/PIS.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/poBEDA1631/PIS/issues"
+  },
+  "homepage": "https://github.com/poBEDA1631/PIS#readme",
+  "dependencies": {
+    "express": "^5.3.0",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "supertest": "^7.3.1"
+  }
+}
