@@ -1,5 +1,6 @@
-const dataStore = require('../models/dataStore');
-const { sendProblemDetails } = require('../middleware/problemDetails');
+const CopyService = require('../services/copyService');
+const { handleControllerError } = require('../middleware/problemDetails');
+const { validateCopyStatus } = require('../utils/validators');
 const { logger, logStatusChange } = require('../logger');
 
 /**
@@ -9,19 +10,10 @@ const updateCopyStatus = (req, res) => {
   const { inventoryNumber } = req.params;
   const { status, comment } = req.body;
 
-  if (!status) {
-    logger.warn(`Missing required field "status" in request body for copy ${inventoryNumber}`);
-    return sendProblemDetails(res, {
-      type: 'https://api.library.local/errors/bad-request',
-      title: 'Bad Request',
-      status: 400,
-      detail: 'Обов\'язкове поле "status" відсутнє у тілі запиту.',
-      instance: req.originalUrl,
-    });
-  }
-
   try {
-    const result = dataStore.updateCopyStatus(inventoryNumber, status, comment);
+    validateCopyStatus(status);
+
+    const result = CopyService.updateStatus(inventoryNumber, status, comment);
 
     logStatusChange({
       inventoryNumber: result.inventoryNumber,
@@ -34,13 +26,7 @@ const updateCopyStatus = (req, res) => {
     return res.status(200).json(result);
   } catch (err) {
     logger.warn(`Status update rejected for copy "${inventoryNumber}": ${err.message}`);
-    return sendProblemDetails(res, {
-      type: err.errorType || 'https://api.library.local/errors/status-update-error',
-      title: err.title || 'Status Update Error',
-      status: err.statusCode || 500,
-      detail: err.message,
-      instance: req.originalUrl,
-    });
+    return handleControllerError(res, req, err);
   }
 };
 
