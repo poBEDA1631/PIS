@@ -8,7 +8,8 @@ info:
     * **REQ-F-001**: Пошук та фільтрація книг у каталозі (назва, автор, ISBN, жанр).
     * **REQ-F-002**: Перегляд картки книги та динамічне обчислення агрегованого стану доступності (`TitleAvailability`).
     * **REQ-F-003**: Управління статусами фізичних примірників (`CopyStatus`), включаючи валідацію переходів у/з `IN_REPAIR`.
-    * **REQ-F-004**: Архівування бібліографічних карток (`isArchived`) за умови списання всіх примірників (`LOST`).
+    * **REQ-F-ADD-001**: Списання фізичних примірників (`DECOMMISSIONED`) за умови втрати або неможливості ремонту.
+    * **REQ-F-004**: Архівування бібліографічних карток (`isArchived`) за умови списання всіх примірників (`LOST` або `DECOMMISSIONED`).
     * **REQ-NF-002**: Контроль цілісності даних та валідація переходів життєвого циклу.
     * **REQ-NF-003**: Розмежування доступу для ролі «Бібліотекар».
   version: 1.0.0
@@ -179,12 +180,13 @@ paths:
     patch:
       tags:
         - Copies
-      summary: Зміна статусу фізичного примірника [REQ-F-003, REQ-NF-002, REQ-NF-003]
+      summary: Зміна статусу фізичного примірника [REQ-F-003, REQ-F-ADD-001, REQ-NF-002, REQ-NF-003]
       description: |
         Змінює статус фізичного примірника згідно з дозволеними переходами життєвого циклу.
-        * Дозволені статуси: `AVAILABLE`, `BORROWED`, `RESERVED`, `IN_REPAIR`, `LOST`.
+        * Дозволені статуси: `AVAILABLE`, `BORROWED`, `RESERVED`, `IN_REPAIR`, `LOST`, `DECOMMISSIONED`.
         * Перехід у `IN_REPAIR` дозволено лише зі статусів `AVAILABLE` або `BORROWED`.
         * Перехід з `IN_REPAIR` у `RESERVED` категорично заборонено (повертає `422`).
+        * Перехід у `DECOMMISSIONED` дозволено лише зі статусів `LOST` або `IN_REPAIR` (REQ-F-ADD-001).
         * Доступно виключно для ролі «Бібліотекар».
       operationId: updateCopyStatus
       security:
@@ -273,7 +275,7 @@ paths:
       summary: Архівування картки книги [REQ-F-004, REQ-NF-003]
       description: |
         Переводить бібліографічний запис книги в стан `isArchived = true`.
-        * **Бізнес-інваріант**: операція дозволяється лише за умови, що всі пов'язані з книгою примірники мають статус `LOST`.
+        * **Бізнес-інваріант**: операція дозволяється лише за умови, що всі пов'язані з книгою примірники мають статус `LOST` або `DECOMMISSIONED` (REQ-F-ADD-001).
         * Після архівування книга виключається з публічного пошуку читачів.
         * Операція доступна виключно бібліотекарю.
       operationId: archiveBook
@@ -410,13 +412,14 @@ components:
 
     CopyStatus:
       type: string
-      description: Поточний стан фізичного примірника книги (REQ-F-003)
+      description: Поточний стан фізичного примірника книги (REQ-F-003, REQ-F-ADD-001)
       enum:
         - AVAILABLE
         - BORROWED
         - RESERVED
         - IN_REPAIR
         - LOST
+        - DECOMMISSIONED
       example: "AVAILABLE"
 
     Book:
@@ -498,6 +501,7 @@ components:
         - reserved
         - inRepair
         - lost
+        - decommissioned
       properties:
         total:
           type: integer
@@ -520,6 +524,10 @@ components:
           minimum: 0
           example: 1
         lost:
+          type: integer
+          minimum: 0
+          example: 0
+        decommissioned:
           type: integer
           minimum: 0
           example: 0
