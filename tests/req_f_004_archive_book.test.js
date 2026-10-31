@@ -8,7 +8,7 @@ describe('REQ-F-004: Архівування картки книги (isArchived)
   const nonExistentBookId = '00000000-0000-0000-0000-000000000000';
 
   describe('BDD Сценарій 3: Архівування та приховування з публічного пошуку', () => {
-    test('Cause: бібліотекар архівує книгу, у якої всі примірники LOST -> Effect: HTTP 200, isArchived=true', async () => {
+    test('Cause: бібліотекар архівує книгу, у якої всі примірники LOST або DECOMMISSIONED -> Effect: HTTP 200, isArchived=true', async () => {
       const response = await request(app)
         .post(`/api/v1/books/${bookWithAllLostCopies}/archive`)
         .set('Authorization', LIBRARIAN_TOKEN);
@@ -42,7 +42,7 @@ describe('REQ-F-004: Архівування картки книги (isArchived)
   });
 
   describe('Інваріант та бізнес-правило: заборона архівування за наявності активних примірників', () => {
-    test('Cause: спроба заархівувати книгу, де не всі примірники LOST -> Effect: відхиляється з HTTP 422 ProblemDetails', async () => {
+    test('Cause: спроба заархівувати книгу, де не всі примірники LOST або DECOMMISSIONED -> Effect: відхиляється з HTTP 422 ProblemDetails', async () => {
       const response = await request(app)
         .post(`/api/v1/books/${bookWithActiveCopies}/archive`)
         .set('Authorization', LIBRARIAN_TOKEN);
@@ -51,7 +51,7 @@ describe('REQ-F-004: Архівування картки книги (isArchived)
       expect(response.body).toHaveProperty('type', 'https://api.library.local/errors/archive-precondition-failed');
       expect(response.body).toHaveProperty('title', 'Cannot Archive Book');
       expect(response.body.status).toBe(422);
-      expect(response.body.detail).toMatch(/LOST/i);
+      expect(response.body.detail).toMatch(/LOST|DECOMMISSIONED/i);
     });
   });
 

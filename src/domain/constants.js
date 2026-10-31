@@ -8,6 +8,7 @@ const CopyStatus = Object.freeze({
   RESERVED: 'RESERVED',
   IN_REPAIR: 'IN_REPAIR',
   LOST: 'LOST',
+  DECOMMISSIONED: 'DECOMMISSIONED',
 });
 
 const TitleAvailability = Object.freeze({

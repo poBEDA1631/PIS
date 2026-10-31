@@ -1,7 +1,7 @@
 const { CopyStatus, TitleAvailability } = require('../domain/constants');
 
 /**
- * Pure domain service for calculating TitleAvailability and CopiesSummary (REQ-F-002)
+ * Pure domain service for calculating TitleAvailability and CopiesSummary (REQ-F-002, REQ-F-ADD-001)
  */
 class AvailabilityService {
   /**
@@ -16,6 +16,7 @@ class AvailabilityService {
     const reserved = copies.filter((c) => c.status === CopyStatus.RESERVED).length;
     const inRepair = copies.filter((c) => c.status === CopyStatus.IN_REPAIR).length;
     const lost = copies.filter((c) => c.status === CopyStatus.LOST).length;
+    const decommissioned = copies.filter((c) => c.status === CopyStatus.DECOMMISSIONED).length;
 
     const copiesSummary = {
       total,
@@ -24,12 +25,13 @@ class AvailabilityService {
       reserved,
       inRepair,
       lost,
+      decommissioned,
     };
 
     let availabilityStatus;
     if (available > 0) {
       availabilityStatus = TitleAvailability.AVAILABLE;
-    } else if (total > 0 && lost === total) {
+    } else if (total > 0 && (lost + decommissioned) === total) {
       availabilityStatus = TitleAvailability.OUT_OF_STOCK;
     } else if (total === 0) {
       availabilityStatus = TitleAvailability.OUT_OF_STOCK;

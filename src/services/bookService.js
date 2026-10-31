@@ -98,7 +98,7 @@ class BookService {
   }
 
   /**
-   * Archive book checking business invariant that all copies must be LOST (REQ-F-004)
+   * Archive book checking business invariant that all copies must be LOST or DECOMMISSIONED (REQ-F-004, REQ-F-ADD-001)
    */
   static archiveBook(id) {
     const book = BookRepository.findById(id);
@@ -107,11 +107,13 @@ class BookService {
     }
 
     const copies = CopyRepository.findByBookId(id);
-    const nonLostCopies = copies.filter((c) => c.status !== CopyStatus.LOST);
+    const nonLostOrDecommissioned = copies.filter(
+      (c) => c.status !== CopyStatus.LOST && c.status !== CopyStatus.DECOMMISSIONED
+    );
 
-    if (nonLostCopies.length > 0) {
+    if (nonLostOrDecommissioned.length > 0) {
       throw new ArchivePreconditionError(
-        'Неможливо заархівувати книгу: не всі примірники мають статус LOST (знайдено примірники в обігу/ремонті).'
+        'Неможливо заархівувати книгу: не всі примірники мають статус LOST або DECOMMISSIONED (знайдено примірники в обігу/ремонті).'
       );
     }
 

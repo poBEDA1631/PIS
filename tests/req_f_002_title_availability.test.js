@@ -17,6 +17,7 @@ describe('REQ-F-002: Перегляд картки книги та агрего�
       expect(response.body).toHaveProperty('availabilityStatus', 'AVAILABLE');
       expect(response.body).toHaveProperty('copiesSummary');
       expect(response.body.copiesSummary.available).toBeGreaterThan(0);
+      expect(response.body.copiesSummary).toHaveProperty('decommissioned');
     });
 
     test('Cause: усі примірники в BORROWED, RESERVED або IN_REPAIR -> Effect: availabilityStatus="UNAVAILABLE"', async () => {
@@ -27,6 +28,7 @@ describe('REQ-F-002: Перегляд картки книги та агрего�
       expect(response.body).toHaveProperty('id', sampleBookIdUnavailable);
       expect(response.body).toHaveProperty('availabilityStatus', 'UNAVAILABLE');
       expect(response.body.copiesSummary.available).toBe(0);
+      expect(response.body.copiesSummary).toHaveProperty('decommissioned');
       expect(
         response.body.copiesSummary.borrowed +
         response.body.copiesSummary.reserved +
@@ -43,6 +45,7 @@ describe('REQ-F-002: Перегляд картки книги та агрего�
       expect(response.body).toHaveProperty('availabilityStatus', 'OUT_OF_STOCK');
       expect(response.body.copiesSummary.available).toBe(0);
       expect(response.body.copiesSummary.lost).toBe(response.body.copiesSummary.total);
+      expect(response.body.copiesSummary).toHaveProperty('decommissioned');
     });
 
     test('Cause: запит списку примірників книги -> Effect: повертається масив фізичних примірників з інвентарними номерами', async () => {

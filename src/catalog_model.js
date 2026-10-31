@@ -1,12 +1,7 @@
-﻿/**
- * Базові статуси примірників книги згідно зі специфікацією spec/system_concept.md
+/**
+ * Базові статуси примірників книги згідно зі специфікацією spec/openapi.yaml та spec/addendum_01_decommission.md
  */
-const CopyStatus = Object.freeze({
-  AVAILABLE: 'AVAILABLE',
-  BORROWED: 'BORROWED',
-  RESERVED: 'RESERVED',
-  LOST: 'LOST',
-});
+const { CopyStatus } = require('./domain/constants');
 
 class BookCopy {
   constructor(inventoryNumber, status = CopyStatus.AVAILABLE) {
@@ -16,6 +11,10 @@ class BookCopy {
 
   isAvailable() {
     return this.status === CopyStatus.AVAILABLE;
+  }
+
+  isDecommissioned() {
+    return this.status === CopyStatus.DECOMMISSIONED;
   }
 
   updateStatus(newStatus) {

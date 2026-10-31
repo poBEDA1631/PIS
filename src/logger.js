@@ -68,11 +68,17 @@ const requestLogger = (req, res, next) => {
 };
 
 /**
- * Helper to log domain-specific copy status transitions
+ * Helper to log domain-specific copy status transitions, including DECOMMISSIONED (REQ-F-ADD-001)
  */
 const logStatusChange = ({ inventoryNumber, previousStatus, newStatus, performedBy, reason }) => {
-  logger.info(`Copy status changed: ${inventoryNumber} [${previousStatus} -> ${newStatus}]`, {
-    action: 'COPY_STATUS_CHANGE',
+  const isDecommission = newStatus === 'DECOMMISSIONED';
+  const action = isDecommission ? 'COPY_DECOMMISSIONED' : 'COPY_STATUS_CHANGE';
+  const logMessage = isDecommission
+    ? `Copy permanently decommissioned: ${inventoryNumber} [${previousStatus} -> DECOMMISSIONED]`
+    : `Copy status changed: ${inventoryNumber} [${previousStatus} -> ${newStatus}]`;
+
+  logger.info(logMessage, {
+    action,
     inventoryNumber,
     previousStatus,
     newStatus,
